@@ -1,0 +1,32 @@
+- name: Pull Docker image for the frontend from ECR to EC2 instance
+  hosts: servers
+  become: yes
+  vars_files:
+    - ansible-vars.yaml
+  tasks:
+    - name: Log in to Amazon ECR
+      docker_login:
+        registry_url: "{{ ecr_url }}"
+        username: AWS
+        password: "{{ lookup('pipe', 'aws ecr get-login-password --region ' + region) }}"
+        reauthorize: yes
+
+    - name: Pull frontend Docker image from ECR
+      docker_image:
+        name: "{{ ecr_url }}/{{ ecr_repository }}"
+        tag: "{{ frontend_image_tag }}"
+        source: pull
+
+    - name: Pull backend Docker image from ECR
+      docker_image:
+        name: "{{ ecr_url }}/{{ ecr_repository }}"
+        tag: "{{ backend_image_tag }}"
+        source: pull
+
+    - name: Display Docker images on the host
+      command: docker images
+      register: docker_images_output
+
+    - name: Show Docker images
+      debug:
+        msg: "{{ docker_images_output.stdout }}"
