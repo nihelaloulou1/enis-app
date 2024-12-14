@@ -1,35 +1,10 @@
-// pipeline {
-//     agent any
-
-//     stages {
-//         stage('Checkout Code') {
-//             steps {
-//                 script {
-//                     checkout scmGit(
-//                         branches: [[name: '*/main']],  
-//                         extensions: [], 
-//                         userRemoteConfigs: [[
-//                             credentialsId: 'githubtoken',  
-//                             url: 'https://github.com/nihelaloulou1/enis-app'  
-//                         ]]
-//                     )
-//                 }
-//             }
-//         }
-//     }
-// }
-
 def EC2_PUBLIC_IP = ""
 def RDS_ENDPOINT = ""
 def DEPLOYER_KEY_URI = ""
 
 pipeline {
-    agent {
-        docker {
-            image 'hashicorp/terraform:latest'  // Utilisation de l'image Docker Terraform
-            args '-u root'  // Option pour exécuter en tant que root dans le conteneur
-        }
-    }
+    agent any  // Utilisation d'un agent générique pour toute la pipeline
+
     environment {
         AWS_ACCESS_KEY_ID = credentials('jenkins_aws_access_key_id')
         AWS_SECRET_ACCESS_KEY = credentials('jenkins_aws_secret_access_key')
@@ -43,43 +18,43 @@ pipeline {
         stage('Provision Server and Database') {
             steps {
                 script {
-                    dir('my-terraform-project/remote_backend') {
-                        sh "terraform init"
-                        // Apply Terraform configuration
-                        sh "terraform apply --auto-approve"
-                    }
+                    // Utilisation de Docker pour exécuter Terraform
+                    docker.image('hashicorp/terraform:latest').inside('-u root') {
+                        dir('my-terraform-project/remote_backend') {
+                            sh "terraform init"
+                            sh "terraform apply --auto-approve"
+                        }
 
-                    dir('my-terraform-project') {
-                        // Initialize Terraform
-                        sh "terraform init"
-                        sh "terraform plan -lock=false"
-                        // Apply Terraform configuration
-                        sh "terraform apply -lock=false --auto-approve"
+                        dir('my-terraform-project') {
+                            sh "terraform init"
+                            sh "terraform plan -lock=false"
+                            sh "terraform apply -lock=false --auto-approve"
 
-                        // Get EC2 Public IP
-                        EC2_PUBLIC_IP = sh(
-                            script: 'terraform output instance_details | grep "instance_public_ip" | awk \'{print $3}\' | tr -d \'"\'',
-                            returnStdout: true
-                        ).trim()
+                            // Obtenir l'IP publique de l'EC2
+                            EC2_PUBLIC_IP = sh(
+                                script: 'terraform output instance_details | grep "instance_public_ip" | awk \'{print $3}\' | tr -d \'"\'',
+                                returnStdout: true
+                            ).trim()
 
-                        // Get RDS Endpoint
-                        RDS_ENDPOINT = sh(
-                            script: '''
-                                terraform output rds_endpoint | grep "endpoint" | awk -F'=' '{print $2}' | tr -d '[:space:]"' | sed 's/:3306//'
-                            ''',
-                            returnStdout: true
-                        ).trim()
+                            // Obtenir l'endpoint RDS
+                            RDS_ENDPOINT = sh(
+                                script: '''
+                                    terraform output rds_endpoint | grep "endpoint" | awk -F'=' '{print $2}' | tr -d '[:space:]"' | sed 's/:3306//'
+                                ''',
+                                returnStdout: true
+                            ).trim()
 
-                        // Get Deployer Key URI
-                        DEPLOYER_KEY_URI = sh(
-                            script: 'terraform output deployer_key_s3_uri | tr -d \'\"\'',
-                            returnStdout: true
-                        ).trim()
+                            // Obtenir l'URI de la clé de déploiement
+                            DEPLOYER_KEY_URI = sh(
+                                script: 'terraform output deployer_key_s3_uri | tr -d \'\"\'',
+                                returnStdout: true
+                            ).trim()
 
-                        // Debugging: Print captured values
-                        echo "EC2 Public IP: ${EC2_PUBLIC_IP}"
-                        echo "RDS Endpoint: ${RDS_ENDPOINT}"
-                        echo "Deployer Key URI: ${DEPLOYER_KEY_URI}"
+                            // Débogage : afficher les valeurs capturées
+                            echo "EC2 Public IP: ${EC2_PUBLIC_IP}"
+                            echo "RDS Endpoint: ${RDS_ENDPOINT}"
+                            echo "Deployer Key URI: ${DEPLOYER_KEY_URI}"
+                        }
                     }
                 }
             }
@@ -105,22 +80,22 @@ pipeline {
             steps {
                 script {
                     dir('enis-app-tp/backend/backend') {
-                        // Verify the existence of settings.py
+                        // Vérifier l'existence de settings.py
                         sh '''
                         if [ -f "settings.py" ]; then
                             echo "Found settings.py at $(pwd)"
                         else
-                            echo "settings.py not found in $(pwd)!"
+                            echo "settings.py not found in $(pwd)! Exiting"
                             exit 1
                         fi
                         '''
                         
-                        // Update the HOST in the DATABASES section
+                        // Mettre à jour l'hôte dans la section DATABASES
                         sh """
                         sed -i "/'HOST':/c\\ 'HOST': '${RDS_ENDPOINT}'," settings.py
                         """
                         
-                        // Verify the DATABASES section after the update
+                        // Vérifier la section DATABASES après la mise à jour
                         sh '''
                         echo "DATABASES section of settings.py after update:"
                         sed -n '/DATABASES = {/,/^}/p' settings.py
