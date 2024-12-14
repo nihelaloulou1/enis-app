@@ -21,7 +21,7 @@ pipeline {
             steps {
                 script {
                     // Utilisation de Docker pour exécuter Terraform
-                    docker.image('hashicorp/terraform:latest').inside("-v ${WORKSPACE_PATH}:${WORKSPACE_PATH}") {
+                        docker.image('hashicorp/terraform:latest').inside("-v C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\deploy_note_app\\:C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\deploy_note_app\\") {
                         dir('my-terraform-project/remote_backend') {
                             sh "terraform init"
                             sh "terraform apply --auto-approve"
