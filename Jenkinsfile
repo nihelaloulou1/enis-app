@@ -3,7 +3,7 @@ def RDS_ENDPOINT = ""
 def DEPLOYER_KEY_URI = ""
 
 pipeline {
-    agent any  // Utilisation d'un agent générique pour toute la pipeline
+    agent any
 
     environment {
         AWS_ACCESS_KEY_ID = credentials('jenkins_aws_access_key_id')
@@ -12,51 +12,49 @@ pipeline {
         ECR_REPO_NAME = 'enis-app'
         IMAGE_REPO = "${ECR_REPO_URL}/${ECR_REPO_NAME}"
         AWS_REGION = "us-east-1"
-        // Spécification d'un chemin absolu sous Windows
-        WORKSPACE_PATH = '/c/ProgramData/Jenkins/.jenkins/workspace/deploy_note_app/'
     }
 
     stages {
         stage('Provision Server and Database') {
             steps {
                 script {
-                    // Utilisation de Docker pour exécuter Terraform
-                        docker.image('hashicorp/terraform:latest').inside("-v C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\deploy_note_app\\:C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\deploy_note_app\\") {
-                        dir('my-terraform-project/remote_backend') {
-                            sh "terraform init"
-                            sh "terraform apply --auto-approve"
-                        }
+                    dir('my-terraform-project/remote_backend') {
+                        bat "terraform init"
+                        // Apply Terraform configuration
+                        bat "terraform apply --auto-approve"
+                    }
 
-                        dir('my-terraform-project') {
-                            sh "terraform init"
-                            sh "terraform plan -lock=false"
-                            sh "terraform apply -lock=false --auto-approve"
+                    dir('my-terraform-project') {
+                        // Initialize Terraform
+                        bat "terraform init"
+                        bat "terraform plan -lock=false"
+                        // Apply Terraform configuration
+                        bat "terraform apply -lock=false --auto-approve"
 
-                            // Obtenir l'IP publique de l'EC2
-                            EC2_PUBLIC_IP = sh(
-                                script: 'terraform output instance_details | grep "instance_public_ip" | awk \'{print $3}\' | tr -d \'"\'',
-                                returnStdout: true
-                            ).trim()
+                        // Get EC2 Public IP
+                        EC2_PUBLIC_IP = bat(
+                            script: 'terraform output instance_details | findstr "instance_public_ip" | for /f "tokens=3" %a in (%0) do echo %a',
+                            returnStdout: true
+                        ).trim()
 
-                            // Obtenir l'endpoint RDS
-                            RDS_ENDPOINT = sh(
-                                script: '''
-                                    terraform output rds_endpoint | grep "endpoint" | awk -F'=' '{print $2}' | tr -d '[:space:]"' | sed 's/:3306//'
-                                ''',
-                                returnStdout: true
-                            ).trim()
+                        // Get RDS Endpoint
+                        RDS_ENDPOINT = bat(
+                            script: '''
+                                terraform output rds_endpoint | findstr "endpoint" | for /f "tokens=2 delims==" %a in (%0) do echo %a
+                            ''',
+                            returnStdout: true
+                        ).trim()
 
-                            // Obtenir l'URI de la clé de déploiement
-                            DEPLOYER_KEY_URI = sh(
-                                script: 'terraform output deployer_key_s3_uri | tr -d \'\"\'',
-                                returnStdout: true
-                            ).trim()
+                        // Get Deployer Key URI
+                        DEPLOYER_KEY_URI = bat(
+                            script: 'terraform output deployer_key_s3_uri',
+                            returnStdout: true
+                        ).trim()
 
-                            // Débogage : afficher les valeurs capturées
-                            echo "EC2 Public IP: ${EC2_PUBLIC_IP}"
-                            echo "RDS Endpoint: ${RDS_ENDPOINT}"
-                            echo "Deployer Key URI: ${DEPLOYER_KEY_URI}"
-                        }
+                        // Debugging: Print captured values
+                        echo "EC2 Public IP: ${EC2_PUBLIC_IP}"
+                        echo "RDS Endpoint: ${RDS_ENDPOINT}"
+                        echo "Deployer Key URI: ${DEPLOYER_KEY_URI}"
                     }
                 }
             }
@@ -69,9 +67,9 @@ pipeline {
                         writeFile file: 'config.js', text: """
                         export const API_BASE_URL = 'http://${EC2_PUBLIC_IP}:8000';
                         """
-                        sh '''
+                        bat '''
                         echo "Contents of config.js after update:"
-                        cat config.js
+                        type config.js
                         '''
                     }
                 }
@@ -82,25 +80,25 @@ pipeline {
             steps {
                 script {
                     dir('enis-app-tp/backend/backend') {
-                        // Vérifier l'existence de settings.py
-                        sh '''
-                        if [ -f "settings.py" ]; then
-                            echo "Found settings.py at $(pwd)"
-                        else
-                            echo "settings.py not found in $(pwd)! Exiting"
-                            exit 1
-                        fi
+                        // Verify the existence of settings.py
+                        bat '''
+                        if exist "settings.py" (
+                            echo "Found settings.py at %cd%"
+                        ) else (
+                            echo "settings.py not found in %cd%!"
+                            exit /b 1
+                        )
                         '''
                         
-                        // Mettre à jour l'hôte dans la section DATABASES
-                        sh """
-                        sed -i "/'HOST':/c\\ 'HOST': '${RDS_ENDPOINT}'," settings.py
+                        // Update the HOST in the DATABASES section
+                        bat """
+                        powershell -Command "(Get-Content settings.py) -replace \"'HOST': .*\", \"'HOST': '${RDS_ENDPOINT}'\" | Set-Content settings.py"
                         """
                         
-                        // Vérifier la section DATABASES après la mise à jour
-                        sh '''
+                        // Verify the DATABASES section after the update
+                        bat '''
                         echo "DATABASES section of settings.py after update:"
-                        sed -n '/DATABASES = {/,/^}/p' settings.py
+                        powershell -Command "Select-String -Pattern 'DATABASES = {' -Context 0,10 settings.py"
                         '''
                     }
                 }
