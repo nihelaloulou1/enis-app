@@ -40,7 +40,7 @@ pipeline {
             steps {
                 script {
                     dir('my-terraform-project/remote_backend') {
-                        sh "terraform init"
+                        bat "terraform init"
                         // Apply Terraform configuration
                         sh "terraform apply --auto-approve"
                     }
