@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+
+  backend-app:
+    image: 225989365312.dkr.ecr.us-east-1.amazonaws.com/enis-app:backend-1.0
+    container_name: backend-app
+    restart: always
+    ports:
+      - "9000:8000"
+    depends_on:
+      - mysql
+    networks:
+      - my_bridge
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/admin/login/?next=/admin/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  frontend-app:
+    image:  225989365312.dkr.ecr.us-east-1.amazonaws.com/enis-app:frontend-1.0
+    container_name: frontend-app
+    restart: always
+    ports:
+      - "81:80"
+    depends_on:
+      - mysql
+      - backend-app
+    networks:
+      - my_bridge
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  my_bridge:
+    external: true
+
+volumes:
+  mysql_data:
+    external:
+      name: 6adc6fa9816928216f4cb083aeb5757d8bcedaa0d5d6a9f11ad554b4a34bfdc1
