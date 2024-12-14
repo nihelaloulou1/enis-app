@@ -8,6 +8,6 @@ pipeline {
                   extensions: [], 
                   userRemoteConfigs: [[credentialsId: 'githubtoken', url: 'https://github.com/nihelaloulou1/enis-app']]])
       }
-    }
+    }    
   }
 }
