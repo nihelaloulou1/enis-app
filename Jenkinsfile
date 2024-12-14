@@ -24,8 +24,12 @@ def RDS_ENDPOINT = ""
 def DEPLOYER_KEY_URI = ""
 
 pipeline {
-    agent any
-
+    agent {
+        docker {
+            image 'hashicorp/terraform:latest'  // Utilisation de l'image Docker Terraform
+            args '-u root'  // Option pour exécuter en tant que root dans le conteneur
+        }
+    }
     environment {
         AWS_ACCESS_KEY_ID = credentials('jenkins_aws_access_key_id')
         AWS_SECRET_ACCESS_KEY = credentials('jenkins_aws_secret_access_key')
