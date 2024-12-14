@@ -17,6 +17,16 @@ stages {
                 git url: 'https://github.com/nihelaloulou1/enis-app', branch: 'main'
             }
         }
+        stage('Verify Git Directory') {
+    steps {
+        script {
+            // Afficher le répertoire de travail courant
+            sh 'pwd'
+            // Afficher les fichiers du répertoire
+            sh 'ls -la'
+        }
+    }
+}
 stage('Provision Server and Database') {
 steps {
 script {
