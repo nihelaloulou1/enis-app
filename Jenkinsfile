@@ -13,7 +13,7 @@ pipeline {
         IMAGE_REPO = "${ECR_REPO_URL}/${ECR_REPO_NAME}"
         AWS_REGION = "us-east-1"
         // Spécification d'un chemin absolu sous Windows
-        WORKSPACE_PATH = 'C:/Jenkins/workspace/deploy_note_app'
+        WORKSPACE_PATH = '/c/ProgramData/Jenkins/.jenkins/workspace/deploy_note_app/'
     }
 
     stages {
