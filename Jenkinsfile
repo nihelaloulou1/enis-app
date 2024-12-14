@@ -12,6 +12,8 @@ pipeline {
         ECR_REPO_NAME = 'enis-app'
         IMAGE_REPO = "${ECR_REPO_URL}/${ECR_REPO_NAME}"
         AWS_REGION = "us-east-1"
+        // Spécification d'un chemin absolu sous Windows
+        WORKSPACE_PATH = 'C:/Jenkins/workspace/deploy_note_app'
     }
 
     stages {
@@ -19,7 +21,7 @@ pipeline {
             steps {
                 script {
                     // Utilisation de Docker pour exécuter Terraform
-                    docker.image('hashicorp/terraform:latest').inside('-u root') {
+                    docker.image('hashicorp/terraform:latest').inside("-v ${WORKSPACE_PATH}:${WORKSPACE_PATH}") {
                         dir('my-terraform-project/remote_backend') {
                             sh "terraform init"
                             sh "terraform apply --auto-approve"
