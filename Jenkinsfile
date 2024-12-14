@@ -18,31 +18,70 @@ pipeline {
         stage('Provision Server and Database') {
             steps {
                 script {
+                    // Utilisation du conteneur Docker pour Terraform
                     dir('my-terraform-project/remote_backend') {
-                        sh "terraform init"
+                        sh '''
+                            docker run --rm \
+                                -v $(pwd):/workspace \
+                                -w /workspace \
+                                hashicorp/terraform:latest terraform init
+                        '''
                         // Apply Terraform configuration
-                        sh "terraform apply --auto-approve"
+                        sh '''
+                            docker run --rm \
+                                -v $(pwd):/workspace \
+                                -w /workspace \
+                                hashicorp/terraform:latest terraform apply --auto-approve
+                        '''
                     }
                     dir('my-terraform-project') {
-                        // Initialize Terraform
-                        sh "terraform init"
-                        sh "terraform plan -lock=false"
-                        // Apply Terraform configuration
-                        sh "terraform apply -lock=false --auto-approve"
-                        // Get EC2 Public IP
+                        // Initialiser Terraform avec Docker
+                        sh '''
+                            docker run --rm \
+                                -v $(pwd):/workspace \
+                                -w /workspace \
+                                hashicorp/terraform:latest terraform init
+                        '''
+                        sh '''
+                            docker run --rm \
+                                -v $(pwd):/workspace \
+                                -w /workspace \
+                                hashicorp/terraform:latest terraform plan -lock=false
+                        '''
+                        // Appliquer la configuration Terraform avec Docker
+                        sh '''
+                            docker run --rm \
+                                -v $(pwd):/workspace \
+                                -w /workspace \
+                                hashicorp/terraform:latest terraform apply -lock=false --auto-approve
+                        '''
+                        // Récupérer l'IP publique de l'instance EC2
                         EC2_PUBLIC_IP = sh(
-                            script: 'terraform output instance_details | grep "instance_public_ip" | awk \'{print $3}\' | tr -d \'"\'',
+                            script: '''
+                                docker run --rm \
+                                    -v $(pwd):/workspace \
+                                    -w /workspace \
+                                    hashicorp/terraform:latest terraform output instance_details | grep "instance_public_ip" | awk '{print $3}' | tr -d '"'
+                            ''',
                             returnStdout: true
                         ).trim()
-                        // Get RDS Endpoint
+                        // Récupérer l'endpoint RDS
                         RDS_ENDPOINT = sh(
                             script: '''
-                                terraform output rds_endpoint | grep "endpoint" | awk -F'=' '{print $2}' | tr -d '[:space:]"' | sed 's/:3306//'
+                                docker run --rm \
+                                    -v $(pwd):/workspace \
+                                    -w /workspace \
+                                    hashicorp/terraform:latest terraform output rds_endpoint | grep "endpoint" | awk -F'=' '{print $2}' | tr -d '[:space:]"' | sed 's/:3306//'
                             ''',
                             returnStdout: true
                         ).trim()
                         DEPLOYER_KEY_URI = sh(
-                            script: 'terraform output deployer_key_s3_uri | tr -d \'"\'',
+                            script: '''
+                                docker run --rm \
+                                    -v $(pwd):/workspace \
+                                    -w /workspace \
+                                    hashicorp/terraform:latest terraform output deployer_key_s3_uri | tr -d '"'
+                            ''',
                             returnStdout: true
                         ).trim()
                         // Debugging: Print captured values
@@ -74,7 +113,7 @@ pipeline {
             steps {
                 script {
                     dir('enis-app-tp/backend/backend') {
-                        // Verify the existence of settings.py
+                        // Vérifier l'existence de settings.py
                         sh '''
                             if [ -f "settings.py" ]; then
                                 echo "Found settings.py at $(pwd)"
@@ -83,11 +122,11 @@ pipeline {
                                 exit 1
                             fi
                         '''
-                        // Update the HOST in the DATABASES section
+                        // Mettre à jour le champ 'HOST' dans la section DATABASES
                         sh """
                             sed -i "/'HOST':/c\\ 'HOST': '${RDS_ENDPOINT}'," settings.py
                         """
-                        // Verify the DATABASES section after the update
+                        // Vérifier la section DATABASES après la mise à jour
                         sh '''
                             echo "DATABASES section of settings.py after update:"
                             sed -n '/DATABASES = {/,/^}/p' settings.py
